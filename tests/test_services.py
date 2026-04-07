@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -30,7 +29,12 @@ def make_qdrant_config(api_key: str = "") -> QdrantConfig:
 
 
 class FakeResponse:
-    def __init__(self, status_code: int = 200, payload: object | None = None, text: str = "") -> None:
+    def __init__(
+        self,
+        status_code: int = 200,
+        payload: object | None = None,
+        text: str = "",
+    ) -> None:
         self.status_code = status_code
         self._payload = payload if payload is not None else {}
         self.text = text
@@ -103,10 +107,16 @@ def test_llm_error_paths(monkeypatch: pytest.MonkeyPatch) -> None:
         llm.embed_texts(["one"], make_ollama_config())
 
     with pytest.raises(RuntimeError, match='embedding model "embed-model" was not found'):
-        llm._raise_ollama_model_error(FakeResponse(status_code=404, payload={"error": "Not Found"}), "embed-model")
+        llm._raise_ollama_model_error(
+            FakeResponse(status_code=404, payload={"error": "Not Found"}),
+            "embed-model",
+        )
 
     with pytest.raises(RuntimeError, match="http 500"):
-        llm._raise_ollama_model_error(FakeResponse(status_code=500, payload=ValueError("bad json"), text="oops"), "embed-model")
+        llm._raise_ollama_model_error(
+            FakeResponse(status_code=500, payload=ValueError("bad json"), text="oops"),
+            "embed-model",
+        )
 
 
 def test_qdrant_store_behaviors(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -120,18 +130,33 @@ def test_qdrant_store_behaviors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         vector_store.requests,
         "get",
-        lambda url, headers, timeout: get_calls.append((url, headers, timeout)) or FakeResponse(status_code=404),
+        lambda url, headers, timeout: get_calls.append((url, headers, timeout))
+        or FakeResponse(status_code=404),
     )
     monkeypatch.setattr(
         vector_store.requests,
         "put",
-        lambda url, headers, json, timeout: put_calls.append((url, headers, json, timeout)) or FakeResponse(),
+        lambda url, headers, json, timeout: put_calls.append((url, headers, json, timeout))
+        or FakeResponse(),
     )
     monkeypatch.setattr(
         vector_store.requests,
         "post",
-        lambda url, headers, json, timeout: post_calls.append((url, headers, json, timeout)) or FakeResponse(
-            payload={"result": [{"payload": {"file_path": "/tmp/a", "doc_type": "bank", "page_label": "page 1", "content": "body"}, "score": 0.9}]}
+        lambda url, headers, json, timeout: post_calls.append((url, headers, json, timeout))
+        or FakeResponse(
+            payload={
+                "result": [
+                    {
+                        "payload": {
+                            "file_path": "/tmp/a",
+                            "doc_type": "bank",
+                            "page_label": "page 1",
+                            "content": "body",
+                        },
+                        "score": 0.9,
+                    }
+                ]
+            }
         ),
     )
 
@@ -144,7 +169,11 @@ def test_qdrant_store_behaviors(monkeypatch: pytest.MonkeyPatch) -> None:
     assert store.headers["api-key"] == "secret"
     assert get_calls and put_calls and post_calls
     assert results[0].file_path == "/tmp/a"
-    assert vector_store.build_point_id("/tmp/a", "page 1", 0) == vector_store.build_point_id("/tmp/a", "page 1", 0)
+    assert vector_store.build_point_id(
+        "/tmp/a",
+        "page 1",
+        0,
+    ) == vector_store.build_point_id("/tmp/a", "page 1", 0)
 
     monkeypatch.setattr(
         vector_store.requests,
@@ -162,7 +191,9 @@ def test_qdrant_store_behaviors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         vector_store.requests,
         "put",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not create collection")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("should not create collection")
+        ),
     )
     store.ensure_collection(5)
     assert "api-key" not in vector_store.QdrantStore(make_qdrant_config(api_key="")).headers
@@ -226,7 +257,12 @@ def test_paperless_client_and_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert documents[1].chunks[0].file_path.endswith("/misc/ARCHIVE")
     assert paperless_client._detect_doc_type({"title": "retirement overview"}) == "retirement"
     assert paperless_client._detect_doc_type({"title": "misc"}) == "paperless"
-    assert paperless_client._parse_modified_at({"modified": "bad", "added": "2026-01-05T00:00:00Z"}) > 0
+    assert (
+        paperless_client._parse_modified_at(
+            {"modified": "bad", "added": "2026-01-05T00:00:00Z"}
+        )
+        > 0
+    )
     assert paperless_client._parse_modified_at({}) == 0.0
     assert paperless_client._iso_to_timestamp("2026-01-01T00:00:00Z") > 0
 
@@ -321,4 +357,9 @@ def test_query_service_branches(monkeypatch: pytest.MonkeyPatch) -> None:
             return [result]
 
     monkeypatch.setattr(query_service, "QdrantStore", FakeQdrant)
-    assert query_service._retrieve_results(DummyStore(), make_app_config(qdrant_enabled=True), "q", 4) == [result]
+    assert query_service._retrieve_results(
+        DummyStore(),
+        make_app_config(qdrant_enabled=True),
+        "q",
+        4,
+    ) == [result]

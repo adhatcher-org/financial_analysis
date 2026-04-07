@@ -90,8 +90,14 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
         "top_k": 3,
     }
     assert client.get("/facts", params={"limit": 5}).json()["items"][0]["limit"] == 5
-    assert client.get("/search", params={"query": "needle", "top_k": 4}).json()["items"][0]["top_k"] == 4
-    assert client.post("/search", json={"query": "term", "top_k": 2}).json()["items"][0]["content"] == "term"
+    assert (
+        client.get("/search", params={"query": "needle", "top_k": 4}).json()["items"][0]["top_k"]
+        == 4
+    )
+    assert (
+        client.post("/search", json={"query": "term", "top_k": 2}).json()["items"][0]["content"]
+        == "term"
+    )
 
     monkeypatch.setattr(
         api,

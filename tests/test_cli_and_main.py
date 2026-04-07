@@ -106,7 +106,10 @@ def test_handle_ingest_with_short_error_list(
     assert "... and" not in output
 
 
-def test_handle_ask_branches(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_handle_ask_branches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.setattr(cli, "load_config", lambda path: {"config": path})
 
     monkeypatch.setattr(
@@ -147,7 +150,10 @@ def test_handle_ask_branches(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Cap
     assert "excerpt" in output
 
 
-def test_handle_facts_and_search(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_handle_facts_and_search(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     monkeypatch.setattr(cli, "load_config", lambda path: {"config": path})
 
     monkeypatch.setattr(cli, "list_facts", lambda *_args, **_kwargs: [])

@@ -33,7 +33,10 @@ def test_read_document_for_text_markdown_csv_and_unsupported(tmp_path: Path) -> 
         read_document(tmp_path / "file.docx")
 
 
-def test_read_document_for_pdf_handles_errors(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_read_document_for_pdf_handles_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     class FakePage:
         def __init__(self, text: str | Exception) -> None:
             self.text = text

@@ -42,7 +42,13 @@ class FakeStore:
         self.inserted_chunks.append((document_id, page_label, content))
         return len(self.inserted_chunks)
 
-    def insert_fact(self, document_id: int, fact_type: str, fact_value: str, page_label: str) -> None:
+    def insert_fact(
+        self,
+        document_id: int,
+        fact_type: str,
+        fact_value: str,
+        page_label: str,
+    ) -> None:
         self.inserted_facts.append((document_id, fact_type, fact_value, page_label))
 
 
@@ -58,7 +64,11 @@ class FakeQdrant:
         self.replacements.append((file_path, points))
 
 
-def make_config(*, qdrant_enabled: bool = False, paperless_enabled: bool = False) -> SimpleNamespace:
+def make_config(
+    *,
+    qdrant_enabled: bool = False,
+    paperless_enabled: bool = False,
+) -> SimpleNamespace:
     return SimpleNamespace(
         postgres=SimpleNamespace(dsn="postgres://dsn"),
         qdrant=SimpleNamespace(enabled=qdrant_enabled),
@@ -69,7 +79,10 @@ def make_config(*, qdrant_enabled: bool = False, paperless_enabled: bool = False
     )
 
 
-def test_store_document_and_iter_source_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_store_document_and_iter_source_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     fake_store = FakeStore()
     fake_qdrant = FakeQdrant()
     pages = [DocumentChunk("/tmp/a.txt", "bank", "page 1", "abcdef")]
@@ -79,9 +92,19 @@ def test_store_document_and_iter_source_files(monkeypatch: pytest.MonkeyPatch, t
     monkeypatch.setattr(
         ingest,
         "extract_facts",
-        lambda page: [{"fact_type": "kind", "fact_value": page.doc_type, "page_label": page.page_label}],
+        lambda page: [
+            {
+                "fact_type": "kind",
+                "fact_value": page.doc_type,
+                "page_label": page.page_label,
+            }
+        ],
     )
-    monkeypatch.setattr(ingest, "build_point_id", lambda file_path, page_label, index: f"{file_path}:{page_label}:{index}")
+    monkeypatch.setattr(
+        ingest,
+        "build_point_id",
+        lambda file_path, page_label, index: f"{file_path}:{page_label}:{index}",
+    )
 
     ingest._store_document(
         store=fake_store,
@@ -151,7 +174,11 @@ def test_ingest_local_and_paperless_paths(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     stored: list[str] = []
     monkeypatch.setattr(ingest, "read_document", fake_read_document)
-    monkeypatch.setattr(ingest, "_store_document", lambda **kwargs: stored.append(kwargs["file_path"]))
+    monkeypatch.setattr(
+        ingest,
+        "_store_document",
+        lambda **kwargs: stored.append(kwargs["file_path"]),
+    )
 
     processed, skipped, errors = ingest._ingest_local_documents(
         fake_store,
@@ -173,13 +200,24 @@ def test_ingest_local_and_paperless_paths(monkeypatch: pytest.MonkeyPatch, tmp_p
                 SimpleNamespace(
                     document_id=2,
                     modified_at=2.0,
-                    chunks=[DocumentChunk("/paperless/doc.txt", "paperless", "paperless-content", "body")],
+                    chunks=[
+                        DocumentChunk(
+                            "/paperless/doc.txt",
+                            "paperless",
+                            "paperless-content",
+                            "body",
+                        )
+                    ],
                 ),
             ]
 
     monkeypatch.setattr(ingest, "PaperlessClient", FakePaperlessClient)
     stored.clear()
-    processed, skipped, errors = ingest._ingest_paperless_documents(fake_store, fake_qdrant, make_config())
+    processed, skipped, errors = ingest._ingest_paperless_documents(
+        fake_store,
+        fake_qdrant,
+        make_config(),
+    )
     assert (processed, skipped) == (1, 1)
     assert stored == ["/paperless/doc.txt"]
     assert errors == ["paperless:1: no extractable text found"]
@@ -201,7 +239,11 @@ def test_ingest_documents_commit_and_rollback(monkeypatch: pytest.MonkeyPatch) -
 
     failing_store = FakeStore()
     monkeypatch.setattr(ingest, "Store", lambda _dsn: failing_store)
-    monkeypatch.setattr(ingest, "_ingest_local_documents", lambda *_args: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        ingest,
+        "_ingest_local_documents",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
 
     with pytest.raises(RuntimeError, match="boom"):
         ingest.ingest_documents(make_config())
@@ -298,10 +340,18 @@ def test_store_methods(monkeypatch: pytest.MonkeyPatch) -> None:
     instance.connection.rows_by_sql = [FakeCursor(rows=[{"file_path": "/tmp/b"}])]
     assert instance.list_facts(limit=3) == [{"file_path": "/tmp/b"}]
 
-    instance.connection.rows_by_sql = [FakeCursor({"count": 1}), FakeCursor({"count": 2}), FakeCursor({"count": 3})]
+    instance.connection.rows_by_sql = [
+        FakeCursor({"count": 1}),
+        FakeCursor({"count": 2}),
+        FakeCursor({"count": 3}),
+    ]
     assert instance.stats() == {"documents": 1, "chunks": 2, "facts": 3}
 
-    instance.connection.rows_by_sql = [FakeCursor(None), FakeCursor({"count": 2}), FakeCursor({"count": 3})]
+    instance.connection.rows_by_sql = [
+        FakeCursor(None),
+        FakeCursor({"count": 2}),
+        FakeCursor({"count": 3}),
+    ]
     with pytest.raises(RuntimeError, match="Failed to fetch store stats"):
         instance.stats()
 
