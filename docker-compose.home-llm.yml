@@ -1,0 +1,14 @@
+services:
+  home-llm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: home-llm
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HOME_LLM_CONFIG: /app/config.toml
+      HOME_LLM_POSTGRES_DSN: postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@192.168.50.4:5432/home_llm
+    volumes:
+      - ./config.toml:/app/config.toml:ro

@@ -1,0 +1,102 @@
+> from __future__ import annotations
+  
+> import argparse
+> from pathlib import Path
+> from typing import Any
+  
+> from home_llm.config import load_config
+> from home_llm.ingest import ingest_documents
+> from home_llm.query_service import ask_question, list_facts, search_excerpts
+  
+  
+> def main() -> int:
+>     parser = argparse.ArgumentParser(description="Local-first financial document Q&A")
+>     parser.add_argument("--config", default="config.toml", help="Path to TOML config file")
+  
+>     subparsers = parser.add_subparsers(dest="command", required=True)
+  
+>     ingest_parser = subparsers.add_parser("ingest", help="Index documents from configured folders")
+>     ingest_parser.set_defaults(handler=handle_ingest)
+  
+>     ask_parser = subparsers.add_parser("ask", help="Ask a question over indexed documents")
+>     ask_parser.add_argument("question", help="Question to ask")
+>     ask_parser.add_argument("--top-k", type=int, default=None, help="Number of chunks to retrieve")
+>     ask_parser.set_defaults(handler=handle_ask)
+  
+>     facts_parser = subparsers.add_parser("facts", help="List extracted facts")
+>     facts_parser.add_argument("--limit", type=int, default=50, help="Maximum rows to print")
+>     facts_parser.set_defaults(handler=handle_facts)
+  
+>     search_parser = subparsers.add_parser("search", help="Search raw indexed excerpts")
+>     search_parser.add_argument("query", help="Search query")
+>     search_parser.add_argument("--top-k", type=int, default=10, help="Number of results")
+>     search_parser.set_defaults(handler=handle_search)
+  
+>     args = parser.parse_args()
+>     try:
+>         return int(args.handler(args))
+>     except ValueError as exc:
+>         print(exc)
+>         return 1
+  
+  
+> def handle_ingest(args: argparse.Namespace) -> int:
+>     config = load_config(args.config)
+>     stats: dict[str, Any] = ingest_documents(config)
+>     print(f"Indexed {stats['processed']} documents, skipped {stats['skipped']}.")
+>     print(
+>         "Database now contains "
+>         f"{stats['documents']} documents, {stats['chunks']} chunks, "
+>         f"and {stats['facts']} facts."
+>     )
+>     if stats["errors"]:
+>         print("\nSkipped files:")
+>         for item in stats["errors"][:10]:
+>             print(f"- {item}")
+>         if len(stats["errors"]) > 10:
+>             print(f"- ... and {len(stats['errors']) - 10} more")
+>     return 0
+  
+  
+> def handle_ask(args: argparse.Namespace) -> int:
+>     config = load_config(args.config)
+>     payload: dict[str, Any] = ask_question(config, args.question, args.top_k)
+>     if payload["message"]:
+>         print(payload["message"])
+>         return 1
+>     if payload["answer"]:
+>         print(payload["answer"])
+>         return 0
+>     _print_search_results(payload["results"])
+>     return 0
+  
+  
+> def handle_facts(args: argparse.Namespace) -> int:
+>     config = load_config(args.config)
+>     rows = list_facts(config, limit=args.limit)
+>     if not rows:
+>         print("No extracted facts found. Run ingest first.")
+>         return 1
+>     for row in rows:
+>         print(
+>             f"{Path(row['file_path']).name} | {row['doc_type']} | "
+>             f"{row['fact_type']} = {row['fact_value']} | {row['page_label']}"
+>         )
+>     return 0
+  
+  
+> def handle_search(args: argparse.Namespace) -> int:
+>     config = load_config(args.config)
+>     results: list[dict[str, Any]] = search_excerpts(config, args.query, args.top_k)
+>     if not results:
+>         print("No search results found.")
+>         return 1
+>     _print_search_results(results)
+>     return 0
+  
+  
+> def _print_search_results(results: list[dict[str, Any]]) -> None:
+>     for idx, result in enumerate(results, start=1):
+>         print(f"[{idx}] {result['file_path']} ({result['page_label']}, {result['doc_type']})")
+>         print(result["content"])
+>         print()

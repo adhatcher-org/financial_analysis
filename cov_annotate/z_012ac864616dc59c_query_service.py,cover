@@ -1,0 +1,89 @@
+> from __future__ import annotations
+  
+> from dataclasses import asdict
+> from pathlib import Path
+> from typing import Any
+  
+> from home_llm.config import AppConfig
+> from home_llm.llm import ask_ollama, embed_texts
+> from home_llm.store import Store
+> from home_llm.vector_store import QdrantStore
+  
+  
+> def ask_question(config: AppConfig, question: str, top_k: int | None = None) -> dict[str, Any]:
+>     store = Store(config.postgres.dsn)
+>     try:
+>         limit = top_k or config.query.top_k
+>         results = _retrieve_results(store, config, question, limit)
+>         if not results:
+>             return {
+>                 "question": question,
+>                 "answer": None,
+>                 "results": [],
+>                 "message": (
+>                     "No matching excerpts found. "
+>                     "Try rephrasing the question or ingest more documents."
+>                 ),
+>             }
+  
+>         answer = None
+>         if config.ollama.enabled:
+>             answer = ask_ollama(question, results, config.ollama)
+  
+>         return {
+>             "question": question,
+>             "answer": answer,
+>             "results": [asdict(item) for item in results],
+>             "message": None,
+>         }
+>     finally:
+>         store.close()
+  
+  
+> def search_excerpts(
+>     config: AppConfig,
+>     query: str,
+>     top_k: int | None = None,
+> ) -> list[dict[str, Any]]:
+>     store = Store(config.postgres.dsn)
+>     try:
+>         limit = top_k or config.query.top_k
+>         return [asdict(item) for item in _retrieve_results(store, config, query, limit)]
+>     finally:
+>         store.close()
+  
+  
+> def list_facts(config: AppConfig, limit: int = 50) -> list[dict[str, Any]]:
+>     store = Store(config.postgres.dsn)
+>     try:
+>         rows = store.list_facts(limit=limit)
+>         normalized: list[dict[str, Any]] = []
+>         for row in rows:
+>             normalized.append(
+>                 {
+>                     "file_path": str(row["file_path"]),
+>                     "file_name": Path(row["file_path"]).name,
+>                     "doc_type": str(row["doc_type"]),
+>                     "fact_type": str(row["fact_type"]),
+>                     "fact_value": str(row["fact_value"]),
+>                     "page_label": str(row["page_label"]),
+>                 }
+>             )
+>         return normalized
+>     finally:
+>         store.close()
+  
+  
+> def get_stats(config: AppConfig) -> dict[str, int]:
+>     store = Store(config.postgres.dsn)
+>     try:
+>         return store.stats()
+>     finally:
+>         store.close()
+  
+  
+> def _retrieve_results(store: Store, config: AppConfig, query: str, limit: int) -> list:
+>     if config.qdrant.enabled:
+>         query_vector = embed_texts([query], config.ollama)[0]
+>         return QdrantStore(config.qdrant).search(query_vector, limit)
+>     return store.search(query, limit)

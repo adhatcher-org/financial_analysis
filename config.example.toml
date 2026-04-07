@@ -1,0 +1,33 @@
+[postgres]
+dsn = "postgresql://USER:PASSWORD@unraid.local:5432/home_llm"
+dsn_env_var = "HOME_LLM_POSTGRES_DSN"
+
+[ollama]
+base_url = "http://127.0.0.1:11434"
+chat_model = "llama3.1:8b"
+embedding_model = "embeddinggemma:latest"
+enabled = true
+
+[qdrant]
+enabled = false
+base_url = "http://unraid.local:6333"
+collection = "financial_documents"
+api_key = ""
+
+[ingest]
+source_dirs = [
+  "/Users/yourname/Documents/Finance/*/*/2026",
+  "/Users/yourname/Documents/Insurance/*/2026",
+]
+chunk_size = 1400
+chunk_overlap = 200
+extensions = [".pdf", ".txt", ".md", ".csv"]
+
+[query]
+top_k = 6
+
+[paperless]
+enabled = false
+base_url = "https://paperless.example.com"
+token = ""
+page_size = 100

@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from home_llm.models import DocumentChunk
+
+AMOUNT_RE = re.compile(r"(?<!\w)(?:\$|USD\s?)(\d[\d,]*(?:\.\d{2})?)")
+DATE_RE = re.compile(r"\b(?:\d{1,2}/\d{1,2}/\d{2,4}|[A-Z][a-z]+ \d{1,2}, \d{4})\b")
+POLICY_RE = re.compile(
+    r"\bpolicy(?:\s+number|\s+#|#)?[:\s]+([A-Z0-9\-]{5,})\b",
+    re.IGNORECASE,
+)
+ACCOUNT_RE = re.compile(
+    r"\baccount(?:\s+number|\s+#|#)?[:\s]+([A-Z0-9\-\*]{4,})\b",
+    re.IGNORECASE,
+)
+PAYMENT_RE = re.compile(
+    r"\b(?:monthly payment|payment due|minimum payment|premium)"
+    r"[:\s]+\$?(\d[\d,]*(?:\.\d{2})?)\b",
+    re.IGNORECASE,
+)
+
+
+def extract_facts(chunk: DocumentChunk) -> list[dict[str, str]]:
+    text = chunk.content
+    facts: list[dict[str, str]] = []
+    source_name = Path(chunk.file_path).name
+
+    for match in PAYMENT_RE.finditer(text):
+        facts.append(_fact("payment_amount", f"${match.group(1)}", chunk, source_name))
+
+    for match in POLICY_RE.finditer(text):
+        facts.append(_fact("policy_number", match.group(1), chunk, source_name))
+
+    for match in ACCOUNT_RE.finditer(text):
+        facts.append(_fact("account_number", match.group(1), chunk, source_name))
+
+    amounts = [f"${m.group(1)}" for m in AMOUNT_RE.finditer(text)]
+    if amounts:
+        for amount in amounts[:5]:
+            facts.append(_fact("mentioned_amount", amount, chunk, source_name))
+
+    dates = [m.group(0) for m in DATE_RE.finditer(text)]
+    if dates:
+        for date in dates[:5]:
+            facts.append(_fact("mentioned_date", date, chunk, source_name))
+
+    summary = _detect_summary_metric(text)
+    if summary:
+        facts.append(_fact(summary[0], summary[1], chunk, source_name))
+
+    return facts
+
+
+def _detect_summary_metric(text: str) -> tuple[str, str] | None:
+    lowered = text.lower()
+    patterns = [
+        (
+            "ending_balance",
+            r"(?:ending balance|new balance|current balance)[:\s]+\$?(\d[\d,]*(?:\.\d{2})?)",
+        ),
+        (
+            "account_value",
+            r"(?:account value|portfolio value|market value)[:\s]+\$?(\d[\d,]*(?:\.\d{2})?)",
+        ),
+        (
+            "loan_balance",
+            r"(?:principal balance|loan balance|remaining balance)[:\s]+\$?(\d[\d,]*(?:\.\d{2})?)",
+        ),
+        (
+            "coverage_amount",
+            r"(?:coverage|dwelling coverage|liability coverage)[:\s]+\$?(\d[\d,]*(?:\.\d{2})?)",
+        ),
+    ]
+    for label, pattern in patterns:
+        match = re.search(pattern, lowered, re.IGNORECASE)
+        if match:
+            return label, f"${match.group(1)}"
+    return None
+
+
+def _fact(key: str, value: str, chunk: DocumentChunk, source_name: str) -> dict[str, str]:
+    return {
+        "fact_type": key,
+        "fact_value": value,
+        "file_path": chunk.file_path,
+        "page_label": chunk.page_label,
+        "doc_type": chunk.doc_type,
+        "source_name": source_name,
+    }
