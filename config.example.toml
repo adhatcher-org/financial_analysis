@@ -1,5 +1,5 @@
 [postgres]
-dsn = "postgresql://USER:PASSWORD@unraid.local:5432/home_llm"
+dsn = "postgresql://USER:PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm"
 dsn_env_var = "HOME_LLM_POSTGRES_DSN"
 
 [ollama]
@@ -10,7 +10,7 @@ enabled = true
 
 [qdrant]
 enabled = false
-base_url = "http://unraid.local:6333"
+base_url = "http://YOUR-QDRANT-HOST:6333"
 collection = "financial_documents"
 api_key = ""
 

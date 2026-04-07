@@ -140,7 +140,7 @@ Example config:
 
 ```toml
 [postgres]
-dsn = "postgresql://USER:PASSWORD@unraid.local:5432/home_llm"
+dsn = "postgresql://USER:PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm"
 dsn_env_var = "HOME_LLM_POSTGRES_DSN"
 
 [ollama]
@@ -151,7 +151,7 @@ enabled = true
 
 [qdrant]
 enabled = false
-base_url = "http://unraid.local:6333"
+base_url = "http://YOUR-QDRANT-HOST:6333"
 collection = "financial_documents"
 api_key = ""
 
@@ -213,7 +213,7 @@ Run the API:
 
 ```bash
 source .venv/bin/activate
-export HOME_LLM_CONFIG="/Users/aaron/Documents/Development/Home-LLM/config.toml"
+export HOME_LLM_CONFIG="$(pwd)/config.toml"
 uvicorn home_llm.api:app --host 0.0.0.0 --port 8000
 ```
 
@@ -268,7 +268,7 @@ docker run -d \
   --name home-llm \
   -p 8000:8000 \
   -e HOME_LLM_CONFIG=/app/config.toml \
-  -e HOME_LLM_POSTGRES_DSN="postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@192.168.50.4:5432/home_llm" \
+  -e HOME_LLM_POSTGRES_DSN="postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm" \
   -v "$(pwd)/config.toml:/app/config.toml:ro" \
   --restart unless-stopped \
   home-llm:latest

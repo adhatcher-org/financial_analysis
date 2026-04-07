@@ -3,14 +3,14 @@ dsn = ""
 dsn_env_var = "HOME_LLM_POSTGRES_DSN"
 
 [ollama]
-base_url = "http://192.168.50.4:11434"
+base_url = "http://YOUR-OLLAMA-HOST:11434"
 chat_model = "llama3.1:8b"
 embedding_model = "embeddinggemma:latest"
 enabled = true
 
 [qdrant]
 enabled = true
-base_url = "http://192.168.50.4:6333"
+base_url = "http://YOUR-QDRANT-HOST:6333"
 collection = "financial_documents"
 api_key = ""
 
