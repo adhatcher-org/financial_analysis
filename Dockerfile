@@ -12,6 +12,6 @@ COPY src /app/src
 
 RUN pip install .
 
-EXPOSE 8000
+EXPOSE 8123
 
-CMD ["uvicorn", "home_llm.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "home_llm.api:app", "--host", "0.0.0.0", "--port", "8123"]

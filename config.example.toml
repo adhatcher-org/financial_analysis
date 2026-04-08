@@ -1,6 +1,16 @@
 [postgres]
-dsn = "postgresql://USER:PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm"
+dsn = ""
 dsn_env_var = "HOME_LLM_POSTGRES_DSN"
+user = ""
+user_env_var = "HOME_LLM_POSTGRES_USER"
+host = ""
+host_env_var = "HOME_LLM_POSTGRES_HOST"
+port = ""
+port_env_var = "HOME_LLM_POSTGRES_PORT"
+password = ""
+password_env_var = "HOME_LLM_POSTGRES_PASSWORD"
+database = ""
+database_env_var = "HOME_LLM_POSTGRES_DATABASE"
 
 [ollama]
 base_url = "http://127.0.0.1:11434"

@@ -5,6 +5,7 @@ import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 
 @dataclass(slots=True)
@@ -140,9 +141,12 @@ def _resolve_postgres_dsn(raw: dict[str, str]) -> str:
         default_env_var="HOME_LLM_POSTGRES_DSN",
     )
     if not dsn:
+        dsn = _build_postgres_dsn(raw)
+    if not dsn:
         raise ValueError(
             "PostgreSQL DSN is not configured. "
-            "Set [postgres].dsn in config.toml or define HOME_LLM_POSTGRES_DSN."
+            "Set [postgres].dsn in config.toml, define HOME_LLM_POSTGRES_DSN, "
+            "or provide HOME_LLM_POSTGRES_USER/HOST/PORT/PASSWORD/DATABASE."
         )
     return dsn
 
@@ -159,3 +163,46 @@ def _resolve_secret(
     if env_var:
         value = os.environ.get(env_var, value).strip()
     return value
+
+
+def _build_postgres_dsn(raw: dict[str, str]) -> str:
+    user = _resolve_secret(
+        raw,
+        value_key="user",
+        env_var_key="user_env_var",
+        default_env_var="HOME_LLM_POSTGRES_USER",
+    )
+    host = _resolve_secret(
+        raw,
+        value_key="host",
+        env_var_key="host_env_var",
+        default_env_var="HOME_LLM_POSTGRES_HOST",
+    )
+    port = _resolve_secret(
+        raw,
+        value_key="port",
+        env_var_key="port_env_var",
+        default_env_var="HOME_LLM_POSTGRES_PORT",
+    )
+    password = _resolve_secret(
+        raw,
+        value_key="password",
+        env_var_key="password_env_var",
+        default_env_var="HOME_LLM_POSTGRES_PASSWORD",
+    )
+    database = _resolve_secret(
+        raw,
+        value_key="database",
+        env_var_key="database_env_var",
+        default_env_var="HOME_LLM_POSTGRES_DATABASE",
+    )
+
+    if not all([user, host, port, password, database]):
+        return ""
+
+    quoted_user = quote(user, safe="")
+    quoted_password = quote(password, safe="")
+    quoted_database = quote(database, safe="")
+    return (
+        f"postgresql://{quoted_user}:{quoted_password}@{host}:{port}/{quoted_database}"
+    )

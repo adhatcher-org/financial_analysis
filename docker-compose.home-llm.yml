@@ -6,9 +6,13 @@ services:
     container_name: home-llm
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8123:8123"
     environment:
       HOME_LLM_CONFIG: /app/config.toml
-      HOME_LLM_POSTGRES_DSN: postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm
+      HOME_LLM_POSTGRES_USER: home_llm_user
+      HOME_LLM_POSTGRES_HOST: 192.168.50.4
+      HOME_LLM_POSTGRES_PORT: "5432"
+      HOME_LLM_POSTGRES_PASSWORD: YOUR_POSTGRES_PASSWORD
+      HOME_LLM_POSTGRES_DATABASE: home_llm
     volumes:
       - ./config.toml:/app/config.toml:ro

@@ -65,11 +65,17 @@ cp config.example.toml config.toml
 
 3. Configure PostgreSQL.
 
-The app requires a PostgreSQL DSN. You can put it in `config.toml` or supply it through the environment:
+The app needs PostgreSQL connection settings. You can either provide a full DSN or split the connection into separate environment variables:
 
 ```bash
-export HOME_LLM_POSTGRES_DSN="postgresql://USER:PASSWORD@YOUR-HOST:5432/home_llm"
+export HOME_LLM_POSTGRES_USER="home_llm_user"
+export HOME_LLM_POSTGRES_HOST="192.168.50.4"
+export HOME_LLM_POSTGRES_PORT="5432"
+export HOME_LLM_POSTGRES_PASSWORD="YOUR_POSTGRES_PASSWORD"
+export HOME_LLM_POSTGRES_DATABASE="home_llm"
 ```
+
+If you prefer, `HOME_LLM_POSTGRES_DSN` still works too.
 
 4. Configure your ingestion source.
 
@@ -159,8 +165,18 @@ Paperless-first example config:
 
 ```toml
 [postgres]
-dsn = "postgresql://USER:PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm"
+dsn = ""
 dsn_env_var = "HOME_LLM_POSTGRES_DSN"
+user = ""
+user_env_var = "HOME_LLM_POSTGRES_USER"
+host = ""
+host_env_var = "HOME_LLM_POSTGRES_HOST"
+port = ""
+port_env_var = "HOME_LLM_POSTGRES_PORT"
+password = ""
+password_env_var = "HOME_LLM_POSTGRES_PASSWORD"
+database = ""
+database_env_var = "HOME_LLM_POSTGRES_DATABASE"
 
 [ollama]
 base_url = "http://127.0.0.1:11434"
@@ -193,6 +209,7 @@ page_size = 100
 Notes:
 
 - `postgres.dsn_env_var` defaults to `HOME_LLM_POSTGRES_DSN`
+- `postgres.user_env_var`, `host_env_var`, `port_env_var`, `password_env_var`, and `database_env_var` default to `HOME_LLM_POSTGRES_USER`, `HOME_LLM_POSTGRES_HOST`, `HOME_LLM_POSTGRES_PORT`, `HOME_LLM_POSTGRES_PASSWORD`, and `HOME_LLM_POSTGRES_DATABASE`
 - `qdrant.enabled = false` disables vector search if you want keyword-only retrieval
 - `ollama.enabled = false` disables answer generation
 - `query.top_k` is the default retrieval depth for `ask` and `search`
@@ -231,7 +248,7 @@ Run the API:
 ```bash
 source .venv/bin/activate
 export HOME_LLM_CONFIG="$(pwd)/config.toml"
-uvicorn home_llm.api:app --host 0.0.0.0 --port 8000
+uvicorn home_llm.api:app --host 0.0.0.0 --port 8123
 ```
 
 The API reads configuration from `HOME_LLM_CONFIG` and falls back to `config.toml`.
@@ -247,27 +264,27 @@ Endpoints:
 Examples:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8123/health
 ```
 
 ```bash
-curl -X POST http://127.0.0.1:8000/ask \
+curl -X POST http://127.0.0.1:8123/ask \
   -H "Content-Type: application/json" \
   -d '{"question":"What recurring debt payments do I appear to have?","top_k":6}'
 ```
 
 ```bash
-curl "http://127.0.0.1:8000/search?query=mortgage&top_k=5"
+curl "http://127.0.0.1:8123/search?query=mortgage&top_k=5"
 ```
 
 ```bash
-curl -X POST http://127.0.0.1:8000/search \
+curl -X POST http://127.0.0.1:8123/search \
   -H "Content-Type: application/json" \
   -d '{"query":"mortgage","top_k":5}'
 ```
 
 ```bash
-curl "http://127.0.0.1:8000/facts?limit=25"
+curl "http://127.0.0.1:8123/facts?limit=25"
 ```
 
 ## Unraid
@@ -285,6 +302,16 @@ Example `config.toml` pattern for Unraid:
 [postgres]
 dsn = ""
 dsn_env_var = "HOME_LLM_POSTGRES_DSN"
+user = ""
+user_env_var = "HOME_LLM_POSTGRES_USER"
+host = ""
+host_env_var = "HOME_LLM_POSTGRES_HOST"
+port = ""
+port_env_var = "HOME_LLM_POSTGRES_PORT"
+password = ""
+password_env_var = "HOME_LLM_POSTGRES_PASSWORD"
+database = ""
+database_env_var = "HOME_LLM_POSTGRES_DATABASE"
 
 [ollama]
 base_url = "http://YOUR-OLLAMA-HOST:11434"
@@ -317,9 +344,19 @@ page_size = 100
 Important for Unraid:
 
 - for a Paperless-based setup, you do not need to mount document shares into the container
-- `HOME_LLM_POSTGRES_DSN` is usually easier to manage as a container environment variable than embedding credentials in the file
+- split PostgreSQL variables are usually easier to manage in Unraid than embedding a DSN in the file
 - if you enable Qdrant, make sure the embedding model configured in Ollama is available to the Home LLM container over the network
 - if you disable Paperless and switch to folder-based ingestion later, then `source_dirs` must match mounted paths inside the container
+
+Example Unraid Postgres parameters:
+
+```text
+HOME_LLM_POSTGRES_USER=home_llm_user
+HOME_LLM_POSTGRES_HOST=192.168.50.4
+HOME_LLM_POSTGRES_PORT=5432
+HOME_LLM_POSTGRES_PASSWORD=YOUR_POSTGRES_PASSWORD
+HOME_LLM_POSTGRES_DATABASE=home_llm
+```
 
 ## Docker
 
@@ -334,9 +371,13 @@ Run it:
 ```bash
 docker run -d \
   --name home-llm \
-  -p 8000:8000 \
+  -p 8123:8123 \
   -e HOME_LLM_CONFIG=/app/config.toml \
-  -e HOME_LLM_POSTGRES_DSN="postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm" \
+  -e HOME_LLM_POSTGRES_USER="home_llm_user" \
+  -e HOME_LLM_POSTGRES_HOST="192.168.50.4" \
+  -e HOME_LLM_POSTGRES_PORT="5432" \
+  -e HOME_LLM_POSTGRES_PASSWORD="YOUR_POSTGRES_PASSWORD" \
+  -e HOME_LLM_POSTGRES_DATABASE="home_llm" \
   -v "$(pwd)/config.toml:/app/config.toml:ro" \
   --restart unless-stopped \
   home-llm:latest
@@ -348,7 +389,7 @@ Or with Compose:
 docker compose -f docker-compose.home-llm.yml up -d --build
 ```
 
-The container starts the FastAPI service on port `8000`.
+The container starts the FastAPI service on port `8123`.
 
 For a Paperless-based Unraid setup, you usually only need to mount the config file:
 
@@ -361,10 +402,14 @@ services:
     container_name: home-llm
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8123:8123"
     environment:
       HOME_LLM_CONFIG: /app/config.toml
-      HOME_LLM_POSTGRES_DSN: postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm
+      HOME_LLM_POSTGRES_USER: home_llm_user
+      HOME_LLM_POSTGRES_HOST: 192.168.50.4
+      HOME_LLM_POSTGRES_PORT: "5432"
+      HOME_LLM_POSTGRES_PASSWORD: YOUR_POSTGRES_PASSWORD
+      HOME_LLM_POSTGRES_DATABASE: home_llm
     volumes:
       - ./config.toml:/app/config.toml:ro
 ```

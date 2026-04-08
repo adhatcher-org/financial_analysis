@@ -101,6 +101,18 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
     monkeypatch.setattr(api, "get_stats", lambda _cfg: {"documents": 1, "chunks": 2, "facts": 3})
     monkeypatch.setattr(
         api,
+        "ingest_documents",
+        lambda _cfg: {
+            "processed": 2,
+            "skipped": 1,
+            "documents": 5,
+            "chunks": 8,
+            "facts": 13,
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        api,
         "ask_question",
         lambda _cfg, question, top_k: {"question": question, "top_k": top_k},
     )
@@ -129,11 +141,13 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
     root_response = client.get("/")
     favicon_response = client.get("/favicon.ico")
     apple_touch_response = client.get("/apple-touch-icon.png")
+    ingest_response = client.post("/ingest")
 
     assert root_response.status_code == 200
-    assert root_response.json()["name"] == "Home LLM API"
+    assert "Home LLM" in root_response.text
     assert favicon_response.status_code == 204
     assert apple_touch_response.status_code == 204
+    assert ingest_response.json()["processed"] == 2
     assert client.get("/health").json()["stats"] == {"documents": 1, "chunks": 2, "facts": 3}
     assert client.post("/ask", json={"question": "What?", "top_k": 3}).json() == {
         "question": "What?",
@@ -156,6 +170,11 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         api,
+        "ingest_documents",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("ingest failed")),
+    )
+    monkeypatch.setattr(
+        api,
         "list_facts",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("facts failed")),
     )
@@ -166,6 +185,7 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
     )
 
     assert client.post("/ask", json={"question": "What?"}).json()["detail"] == "ask failed"
+    assert client.post("/ingest").json()["detail"] == "ingest failed"
     assert client.get("/facts").json()["detail"] == "facts failed"
     assert client.get("/search", params={"query": "needle"}).json()["detail"] == "search failed"
     assert client.post("/search", json={"query": "needle"}).json()["detail"] == "search failed"
