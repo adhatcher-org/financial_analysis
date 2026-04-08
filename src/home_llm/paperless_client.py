@@ -59,7 +59,10 @@ class PaperlessClient:
         archive_name = str(item.get("archive_serial_number") or "").strip()
         filename = archive_name or f"{title}.paperless.txt"
         storage_path = str(item.get("storage_path") or "paperless")
-        file_path = str(PurePosixPath("/paperless", storage_path, filename))
+        safe_filename = filename or f"paperless-{document_id}.paperless.txt"
+        file_path = str(
+            PurePosixPath("/paperless", storage_path, str(document_id), safe_filename)
+        )
         doc_type = _detect_doc_type(item)
         modified_at = _parse_modified_at(item)
 

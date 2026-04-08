@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +14,13 @@ from home_llm.store import Store
 from home_llm.text_utils import chunk_text
 from home_llm.vector_store import QdrantStore, build_point_id
 
+ProgressCallback = Callable[[dict[str, Any]], None]
 
-def ingest_documents(config: AppConfig) -> dict[str, Any]:
+
+def ingest_documents(
+    config: AppConfig,
+    progress_callback: ProgressCallback | None = None,
+) -> dict[str, Any]:
     store = Store(config.postgres.dsn)
     processed = 0
     skipped = 0
@@ -24,9 +29,9 @@ def ingest_documents(config: AppConfig) -> dict[str, Any]:
     try:
         qdrant = QdrantStore(config.qdrant) if config.qdrant.enabled else None
         ingest_result = (
-            _ingest_paperless_documents(store, qdrant, config)
+            _ingest_paperless_documents(store, qdrant, config, progress_callback)
             if config.paperless.enabled
-            else _ingest_local_documents(store, qdrant, config)
+            else _ingest_local_documents(store, qdrant, config, progress_callback)
         )
         processed, skipped, errors = ingest_result
 
@@ -47,20 +52,74 @@ def _ingest_local_documents(
     store: Store,
     qdrant: QdrantStore | None,
     config: AppConfig,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[int, int, list[str]]:
     processed = 0
     skipped = 0
     errors: list[str] = []
-    for file_path in iter_source_files(config.ingest.source_dirs, config.ingest.extensions):
+    source_files = list(iter_source_files(config.ingest.source_dirs, config.ingest.extensions))
+    _emit_progress(
+        progress_callback,
+        kind="start",
+        source="local",
+        total=len(source_files),
+    )
+    for index, file_path in enumerate(source_files, start=1):
+        _emit_progress(
+            progress_callback,
+            kind="document",
+            source="local",
+            state="processing",
+            index=index,
+            total=len(source_files),
+            label=file_path.name,
+            file_path=str(file_path),
+        )
         try:
             parsed_pages = read_document(file_path)
         except Exception as exc:  # noqa: BLE001
             skipped += 1
             errors.append(f"{file_path}: {exc}")
+            _emit_progress(
+                progress_callback,
+                kind="document",
+                source="local",
+                state="skipped",
+                index=index,
+                total=len(source_files),
+                label=file_path.name,
+                file_path=str(file_path),
+                reason=str(exc),
+            )
             continue
         if not parsed_pages:
             skipped += 1
             errors.append(f"{file_path}: no extractable text found")
+            _emit_progress(
+                progress_callback,
+                kind="document",
+                source="local",
+                state="skipped",
+                index=index,
+                total=len(source_files),
+                label=file_path.name,
+                file_path=str(file_path),
+                reason="no extractable text found",
+            )
+            continue
+        if _document_is_unchanged(store, str(file_path), file_path.stat().st_mtime):
+            skipped += 1
+            _emit_progress(
+                progress_callback,
+                kind="document",
+                source="local",
+                state="skipped",
+                index=index,
+                total=len(source_files),
+                label=file_path.name,
+                file_path=str(file_path),
+                reason="unchanged",
+            )
             continue
 
         _store_document(
@@ -73,6 +132,16 @@ def _ingest_local_documents(
             config=config,
         )
         processed += 1
+        _emit_progress(
+            progress_callback,
+            kind="document",
+            source="local",
+            state="processed",
+            index=index,
+            total=len(source_files),
+            label=file_path.name,
+            file_path=str(file_path),
+        )
     return processed, skipped, errors
 
 
@@ -80,16 +149,67 @@ def _ingest_paperless_documents(
     store: Store,
     qdrant: QdrantStore | None,
     config: AppConfig,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[int, int, list[str]]:
     processed = 0
     skipped = 0
     errors: list[str] = []
     client = PaperlessClient(config.paperless)
     documents = client.iter_documents()
-    for document in documents:
+    _emit_progress(
+        progress_callback,
+        kind="start",
+        source="paperless",
+        total=len(documents),
+    )
+    for index, document in enumerate(documents, start=1):
+        metadata = getattr(document, "metadata", {}) or {}
+        label = str(metadata.get("title") or f"Paperless {document.document_id}")
+        _emit_progress(
+            progress_callback,
+            kind="document",
+            source="paperless",
+            state="processing",
+            index=index,
+            total=len(documents),
+            label=label,
+            file_path=document.chunks[0].file_path if document.chunks else "",
+            document_id=document.document_id,
+        )
         if not document.chunks:
             skipped += 1
             errors.append(f"paperless:{document.document_id}: no extractable text found")
+            _emit_progress(
+                progress_callback,
+                kind="document",
+                source="paperless",
+                state="skipped",
+                index=index,
+                total=len(documents),
+                label=label,
+                file_path="",
+                document_id=document.document_id,
+                reason="no extractable text found",
+            )
+            continue
+        if _document_is_unchanged(
+            store,
+            document.chunks[0].file_path,
+            document.modified_at,
+        ):
+            skipped += 1
+            _emit_progress(
+                progress_callback,
+                kind="document",
+                source="paperless",
+                state="skipped",
+                index=index,
+                total=len(documents),
+                label=label,
+                file_path=document.chunks[0].file_path,
+                document_id=document.document_id,
+                reason="unchanged",
+            )
             continue
         _store_document(
             store=store,
@@ -101,6 +221,17 @@ def _ingest_paperless_documents(
             config=config,
         )
         processed += 1
+        _emit_progress(
+            progress_callback,
+            kind="document",
+            source="paperless",
+            state="processed",
+            index=index,
+            total=len(documents),
+            label=label,
+            file_path=document.chunks[0].file_path,
+            document_id=document.document_id,
+        )
     return processed, skipped, errors
 
 
@@ -152,6 +283,19 @@ def _store_document(
 
     if qdrant:
         qdrant.replace_document_chunks(file_path, qdrant_points)
+
+
+def _document_is_unchanged(store: Store, file_path: str, modified_at: float) -> bool:
+    existing_modified_at = store.get_document_modified_at(file_path)
+    if existing_modified_at is None:
+        return False
+    return existing_modified_at >= modified_at
+
+
+def _emit_progress(progress_callback: ProgressCallback | None, **payload: Any) -> None:
+    if progress_callback is None:
+        return
+    progress_callback(payload)
 
 
 def iter_source_files(source_dirs: list[Path], extensions: set[str]) -> Iterable[Path]:

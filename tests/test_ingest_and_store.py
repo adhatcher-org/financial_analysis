@@ -14,6 +14,7 @@ class FakeStore:
         self.committed = False
         self.rolled_back = False
         self.closed = False
+        self.existing_modified_at: dict[str, float] = {}
         self.upserts: list[tuple[str, str, float]] = []
         self.cleared: list[int] = []
         self.inserted_chunks: list[tuple[int, str, str]] = []
@@ -34,6 +35,9 @@ class FakeStore:
     def upsert_document(self, file_path: str, doc_type: str, modified_at: float) -> int:
         self.upserts.append((file_path, doc_type, modified_at))
         return 42
+
+    def get_document_modified_at(self, file_path: str) -> float | None:
+        return self.existing_modified_at.get(file_path)
 
     def clear_document_contents(self, document_id: int) -> None:
         self.cleared.append(document_id)
@@ -213,14 +217,32 @@ def test_ingest_local_and_paperless_paths(monkeypatch: pytest.MonkeyPatch, tmp_p
 
     monkeypatch.setattr(ingest, "PaperlessClient", FakePaperlessClient)
     stored.clear()
+    progress_events: list[dict[str, object]] = []
+    fake_store.existing_modified_at["/paperless/doc.txt"] = 2.0
     processed, skipped, errors = ingest._ingest_paperless_documents(
         fake_store,
         fake_qdrant,
         make_config(),
+        progress_events.append,
+    )
+    assert (processed, skipped) == (0, 2)
+    assert stored == []
+    assert errors == ["paperless:1: no extractable text found"]
+    assert progress_events[0] == {"kind": "start", "source": "paperless", "total": 2}
+    assert progress_events[-1]["reason"] == "unchanged"
+
+    fake_store.existing_modified_at.clear()
+    progress_events.clear()
+    processed, skipped, errors = ingest._ingest_paperless_documents(
+        fake_store,
+        fake_qdrant,
+        make_config(),
+        progress_events.append,
     )
     assert (processed, skipped) == (1, 1)
     assert stored == ["/paperless/doc.txt"]
     assert errors == ["paperless:1: no extractable text found"]
+    assert any(event.get("state") == "processed" for event in progress_events)
 
 
 def test_ingest_documents_commit_and_rollback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -298,6 +320,12 @@ def test_store_methods(monkeypatch: pytest.MonkeyPatch) -> None:
 
     instance.connection.rows_by_sql = [FakeCursor({"id": 5})]
     assert instance.upsert_document("/tmp/a", "bank", 1.0) == 5
+
+    instance.connection.rows_by_sql = [FakeCursor({"modified_at": 3.5})]
+    assert instance.get_document_modified_at("/tmp/a") == 3.5
+
+    instance.connection.rows_by_sql = [FakeCursor(None)]
+    assert instance.get_document_modified_at("/tmp/missing") is None
 
     instance.connection.rows_by_sql = [FakeCursor(None)]
     with pytest.raises(RuntimeError, match="Failed to upsert"):

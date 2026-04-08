@@ -130,33 +130,37 @@ def test_qdrant_store_behaviors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         vector_store.requests,
         "get",
-        lambda url, headers, timeout: get_calls.append((url, headers, timeout))
-        or FakeResponse(status_code=404),
+        lambda url, headers, timeout: (
+            get_calls.append((url, headers, timeout)) or FakeResponse(status_code=404)
+        ),
     )
     monkeypatch.setattr(
         vector_store.requests,
         "put",
-        lambda url, headers, json, timeout: put_calls.append((url, headers, json, timeout))
-        or FakeResponse(),
+        lambda url, headers, json, timeout: (
+            put_calls.append((url, headers, json, timeout)) or FakeResponse()
+        ),
     )
     monkeypatch.setattr(
         vector_store.requests,
         "post",
-        lambda url, headers, json, timeout: post_calls.append((url, headers, json, timeout))
-        or FakeResponse(
-            payload={
-                "result": [
-                    {
-                        "payload": {
-                            "file_path": "/tmp/a",
-                            "doc_type": "bank",
-                            "page_label": "page 1",
-                            "content": "body",
-                        },
-                        "score": 0.9,
-                    }
-                ]
-            }
+        lambda url, headers, json, timeout: (
+            post_calls.append((url, headers, json, timeout))
+            or FakeResponse(
+                payload={
+                    "result": [
+                        {
+                            "payload": {
+                                "file_path": "/tmp/a",
+                                "doc_type": "bank",
+                                "page_label": "page 1",
+                                "content": "body",
+                            },
+                            "score": 0.9,
+                        }
+                    ]
+                }
+            )
         ),
     )
 
@@ -254,13 +258,14 @@ def test_paperless_client_and_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client.session.headers["Authorization"] == "Token abc"
     assert len(documents) == 2
     assert documents[0].chunks[0].doc_type == "mortgage"
-    assert documents[1].chunks[0].file_path.endswith("/misc/ARCHIVE")
+    assert documents[0].chunks[0].file_path.endswith(
+        "/mortgage/2026/1/Mortgage Statement.paperless.txt"
+    )
+    assert documents[1].chunks[0].file_path.endswith("/misc/3/ARCHIVE")
     assert paperless_client._detect_doc_type({"title": "retirement overview"}) == "retirement"
     assert paperless_client._detect_doc_type({"title": "misc"}) == "paperless"
     assert (
-        paperless_client._parse_modified_at(
-            {"modified": "bad", "added": "2026-01-05T00:00:00Z"}
-        )
+        paperless_client._parse_modified_at({"modified": "bad", "added": "2026-01-05T00:00:00Z"})
         > 0
     )
     assert paperless_client._parse_modified_at({}) == 0.0

@@ -61,6 +61,15 @@ class Store:
             raise RuntimeError(f"Failed to upsert document row for {file_path}")
         return int(row["id"])
 
+    def get_document_modified_at(self, file_path: str) -> float | None:
+        row = self.connection.execute(
+            "SELECT modified_at FROM documents WHERE file_path = %s",
+            (file_path,),
+        ).fetchone()
+        if row is None:
+            return None
+        return float(row["modified_at"])
+
     def clear_document_contents(self, document_id: int) -> None:
         self.connection.execute("DELETE FROM facts WHERE document_id = %s", (document_id,))
         self.connection.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))

@@ -136,18 +136,70 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
         lambda _cfg, query, top_k: [{"file_path": "/tmp/a", "content": query, "top_k": top_k}],
     )
 
+    class FakeJobManager:
+        def start_job(self) -> tuple[dict[str, object], bool]:
+            return (
+                {
+                    "job_id": "job-123",
+                    "status": "running",
+                    "source": "paperless",
+                    "total": 4,
+                    "processed": 1,
+                    "skipped": 1,
+                    "current_index": 3,
+                    "current_document": "Mortgage Statement",
+                    "current_file_path": "/paperless/1/doc.txt",
+                    "started_at": "2026-04-07 09:00:00",
+                    "finished_at": None,
+                    "error": None,
+                    "result": None,
+                    "events": [
+                        {
+                            "kind": "document",
+                            "state": "processed",
+                            "source": "paperless",
+                            "index": 1,
+                            "total": 4,
+                            "label": "Mortgage Statement",
+                            "file_path": "/paperless/1/doc.txt",
+                            "timestamp": "2026-04-07 09:00:01",
+                        }
+                    ],
+                },
+                True,
+            )
+
+        def get_current_job(self) -> dict[str, object]:
+            return {"job_id": "job-123", "status": "running", "events": []}
+
+        def get_job(self, job_id: str) -> dict[str, object] | None:
+            if job_id == "job-123":
+                return {"job_id": "job-123", "status": "completed", "events": []}
+            return None
+
+    monkeypatch.setattr(api, "INGEST_JOB_MANAGER", FakeJobManager())
+
     client = TestClient(create_app())
 
     root_response = client.get("/")
+    documents_response = client.get("/documents")
     favicon_response = client.get("/favicon.ico")
     apple_touch_response = client.get("/apple-touch-icon.png")
     ingest_response = client.post("/ingest")
+    ingest_job_response = client.post("/ingest/jobs")
 
     assert root_response.status_code == 200
     assert "Home LLM" in root_response.text
+    assert documents_response.status_code == 200
+    assert "Document Management" in documents_response.text
     assert favicon_response.status_code == 204
     assert apple_touch_response.status_code == 204
     assert ingest_response.json()["processed"] == 2
+    assert ingest_job_response.json()["started"] is True
+    assert ingest_job_response.json()["job"]["job_id"] == "job-123"
+    assert client.get("/ingest/jobs/current").json()["job"]["job_id"] == "job-123"
+    assert client.get("/ingest/jobs/job-123").json()["job"]["status"] == "completed"
+    assert client.get("/ingest/jobs/missing").status_code == 404
     assert client.get("/health").json()["stats"] == {"documents": 1, "chunks": 2, "facts": 3}
     assert client.post("/ask", json={"question": "What?", "top_k": 3}).json() == {
         "question": "What?",
