@@ -6,8 +6,8 @@ Home LLM indexes documents you already have, stores structured metadata in Postg
 
 ## What It Does
 
-- Ingests local `.pdf`, `.txt`, `.md`, and `.csv` files
-- Optionally ingests OCR text and metadata from Paperless-ngx
+- Ingests OCR text and metadata from Paperless-ngx
+- Can also ingest local `.pdf`, `.txt`, `.md`, and `.csv` files if you explicitly configure local folder scanning
 - Extracts lightweight facts such as balances, payments, policy numbers, and due dates
 - Supports keyword search over indexed excerpts
 - Supports retrieval-augmented question answering with source-backed results
@@ -17,7 +17,7 @@ This project is a retrieval system, not a trained foundation model. Your origina
 
 ## Architecture
 
-- Source documents: local folders on your Mac, or Paperless-ngx over HTTP
+- Source documents: Paperless-ngx over HTTP, or local folders visible to the runtime if you explicitly enable folder-based ingestion
 - PostgreSQL: documents, chunks, and extracted facts
 - Qdrant: optional vector search index
 - Ollama: optional local chat and embedding models
@@ -71,7 +71,27 @@ The app requires a PostgreSQL DSN. You can put it in `config.toml` or supply it 
 export HOME_LLM_POSTGRES_DSN="postgresql://USER:PASSWORD@YOUR-HOST:5432/home_llm"
 ```
 
-4. Update your ingest settings in `config.toml`:
+4. Configure your ingestion source.
+
+For a Paperless-first setup:
+
+```toml
+[paperless]
+enabled = true
+base_url = "https://paperless.example.com"
+token = "YOUR_PAPERLESS_TOKEN"
+page_size = 100
+
+[ingest]
+source_dirs = []
+chunk_size = 1400
+chunk_overlap = 200
+extensions = [".pdf", ".txt", ".md", ".csv"]
+```
+
+When Paperless is enabled, `ingest` pulls OCR text from Paperless and ignores local `source_dirs` for that run.
+
+If you want local folder scanning instead, use settings like:
 
 ```toml
 [ingest]
@@ -85,6 +105,17 @@ extensions = [".pdf", ".txt", ".md", ".csv"]
 ```
 
 `source_dirs` supports exact paths and glob patterns.
+
+If you run folder-based ingestion in Docker on Unraid, these must be container-visible paths from mounted shares, for example:
+
+```toml
+[ingest]
+source_dirs = [
+  "/data/finance/banks/*/2026",
+  "/data/finance/investments/*/2026",
+  "/data/insurance/*/2026",
+]
+```
 
 5. Optional: configure Ollama:
 
@@ -103,30 +134,18 @@ If you want generated answers or vector search, make sure the configured models 
 ```toml
 [qdrant]
 enabled = true
-base_url = "http://YOUR-HOST:6333"
+base_url = "http://YOUR-QDRANT-HOST:6333"
 collection = "financial_documents"
 api_key = ""
 ```
 
-7. Optional: enable Paperless-ngx ingestion instead of local folder scanning:
-
-```toml
-[paperless]
-enabled = true
-base_url = "https://paperless.example.com"
-token = "YOUR_PAPERLESS_TOKEN"
-page_size = 100
-```
-
-When Paperless is enabled, `ingest` pulls OCR text from Paperless and ignores local `source_dirs` for that run.
-
-8. Run ingestion:
+7. Run ingestion:
 
 ```bash
 python -m home_llm --config config.toml ingest
 ```
 
-9. Query the index:
+8. Query the index:
 
 ```bash
 python -m home_llm --config config.toml ask "What recurring debt payments do I appear to have?"
@@ -136,7 +155,7 @@ python -m home_llm --config config.toml facts --limit 25
 
 ## Configuration Reference
 
-Example config:
+Paperless-first example config:
 
 ```toml
 [postgres]
@@ -150,16 +169,13 @@ embedding_model = "embeddinggemma:latest"
 enabled = true
 
 [qdrant]
-enabled = false
+enabled = true
 base_url = "http://YOUR-QDRANT-HOST:6333"
 collection = "financial_documents"
 api_key = ""
 
 [ingest]
-source_dirs = [
-  "/Users/yourname/Documents/Finance/*/*/2026",
-  "/Users/yourname/Documents/Insurance/*/2026",
-]
+source_dirs = []
 chunk_size = 1400
 chunk_overlap = 200
 extensions = [".pdf", ".txt", ".md", ".csv"]
@@ -168,18 +184,19 @@ extensions = [".pdf", ".txt", ".md", ".csv"]
 top_k = 6
 
 [paperless]
-enabled = false
+enabled = true
 base_url = "https://paperless.example.com"
-token = ""
+token = "YOUR_PAPERLESS_TOKEN"
 page_size = 100
 ```
 
 Notes:
 
 - `postgres.dsn_env_var` defaults to `HOME_LLM_POSTGRES_DSN`
-- `qdrant.enabled = false` disables vector search
+- `qdrant.enabled = false` disables vector search if you want keyword-only retrieval
 - `ollama.enabled = false` disables answer generation
 - `query.top_k` is the default retrieval depth for `ask` and `search`
+- `paperless.enabled = true` makes `ingest` use Paperless instead of local `source_dirs`
 
 ## CLI
 
@@ -253,6 +270,57 @@ curl -X POST http://127.0.0.1:8000/search \
 curl "http://127.0.0.1:8000/facts?limit=25"
 ```
 
+## Unraid
+
+For Unraid, the simplest model is:
+
+- run Home LLM as a container
+- mount your config file into the container
+- point PostgreSQL, Qdrant, Ollama, and optionally Paperless at reachable hostnames or IPs on your network
+- ingest documents from Paperless-ngx
+
+Example `config.toml` pattern for Unraid:
+
+```toml
+[postgres]
+dsn = ""
+dsn_env_var = "HOME_LLM_POSTGRES_DSN"
+
+[ollama]
+base_url = "http://YOUR-OLLAMA-HOST:11434"
+chat_model = "llama3.1:8b"
+embedding_model = "embeddinggemma:latest"
+enabled = true
+
+[qdrant]
+enabled = true
+base_url = "http://YOUR-QDRANT-HOST:6333"
+collection = "financial_documents"
+api_key = ""
+
+[ingest]
+source_dirs = []
+chunk_size = 1400
+chunk_overlap = 200
+extensions = [".pdf", ".txt", ".md", ".csv"]
+
+[query]
+top_k = 6
+
+[paperless]
+enabled = true
+base_url = "https://paperless.example.com"
+token = "YOUR_PAPERLESS_TOKEN"
+page_size = 100
+```
+
+Important for Unraid:
+
+- for a Paperless-based setup, you do not need to mount document shares into the container
+- `HOME_LLM_POSTGRES_DSN` is usually easier to manage as a container environment variable than embedding credentials in the file
+- if you enable Qdrant, make sure the embedding model configured in Ollama is available to the Home LLM container over the network
+- if you disable Paperless and switch to folder-based ingestion later, then `source_dirs` must match mounted paths inside the container
+
 ## Docker
 
 Build the image:
@@ -281,6 +349,27 @@ docker compose -f docker-compose.home-llm.yml up -d --build
 ```
 
 The container starts the FastAPI service on port `8000`.
+
+For a Paperless-based Unraid setup, you usually only need to mount the config file:
+
+```yaml
+services:
+  home-llm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: home-llm
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HOME_LLM_CONFIG: /app/config.toml
+      HOME_LLM_POSTGRES_DSN: postgresql://home_llm_user:YOUR_URL_ENCODED_PASSWORD@YOUR-POSTGRES-HOST:5432/home_llm
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+```
+
+If you switch to folder-based ingestion later, add read-only mounts for those shares and update `source_dirs` to the mounted container paths.
 
 ## Make Targets
 

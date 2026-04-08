@@ -13,6 +13,7 @@ enabled = false
 base_url = "http://YOUR-QDRANT-HOST:6333"
 collection = "financial_documents"
 api_key = ""
+api_key_env_var = "HOME_LLM_QDRANT_API_KEY"
 
 [ingest]
 source_dirs = [
@@ -30,4 +31,5 @@ top_k = 6
 enabled = false
 base_url = "https://paperless.example.com"
 token = ""
+token_env_var = "HOME_LLM_PAPERLESS_TOKEN"
 page_size = 100

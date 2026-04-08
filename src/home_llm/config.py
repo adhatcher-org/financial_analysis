@@ -85,7 +85,12 @@ def load_config(config_path: str | Path) -> AppConfig:
             enabled=bool(qdrant.get("enabled", False)),
             base_url=str(qdrant.get("base_url", "http://127.0.0.1:6333")).rstrip("/"),
             collection=str(qdrant.get("collection", "financial_documents")),
-            api_key=str(qdrant.get("api_key", "")),
+            api_key=_resolve_secret(
+                qdrant,
+                value_key="api_key",
+                env_var_key="api_key_env_var",
+                default_env_var="HOME_LLM_QDRANT_API_KEY",
+            ),
         ),
         ingest=IngestConfig(
             source_dirs=_resolve_source_dirs(ingest["source_dirs"]),
@@ -99,7 +104,12 @@ def load_config(config_path: str | Path) -> AppConfig:
         paperless=PaperlessConfig(
             enabled=bool(paperless.get("enabled", False)),
             base_url=str(paperless.get("base_url", "")).rstrip("/"),
-            token=str(paperless.get("token", "")).strip(),
+            token=_resolve_secret(
+                paperless,
+                value_key="token",
+                env_var_key="token_env_var",
+                default_env_var="HOME_LLM_PAPERLESS_TOKEN",
+            ),
             page_size=int(paperless.get("page_size", 100)),
         ),
         query=QueryConfig(top_k=int(query.get("top_k", 6))),
@@ -123,13 +133,29 @@ def _resolve_source_dirs(items: list[str]) -> list[Path]:
 
 
 def _resolve_postgres_dsn(raw: dict[str, str]) -> str:
-    dsn = str(raw.get("dsn", "")).strip()
-    dsn_env_var = str(raw.get("dsn_env_var", "HOME_LLM_POSTGRES_DSN")).strip()
-    if dsn_env_var:
-        dsn = os.environ.get(dsn_env_var, dsn).strip()
+    dsn = _resolve_secret(
+        raw,
+        value_key="dsn",
+        env_var_key="dsn_env_var",
+        default_env_var="HOME_LLM_POSTGRES_DSN",
+    )
     if not dsn:
         raise ValueError(
             "PostgreSQL DSN is not configured. "
             "Set [postgres].dsn in config.toml or define HOME_LLM_POSTGRES_DSN."
         )
     return dsn
+
+
+def _resolve_secret(
+    raw: dict[str, str],
+    *,
+    value_key: str,
+    env_var_key: str,
+    default_env_var: str,
+) -> str:
+    value = str(raw.get(value_key, "")).strip()
+    env_var = str(raw.get(env_var_key, default_env_var)).strip()
+    if env_var:
+        value = os.environ.get(env_var, value).strip()
+    return value

@@ -126,6 +126,14 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
 
     client = TestClient(create_app())
 
+    root_response = client.get("/")
+    favicon_response = client.get("/favicon.ico")
+    apple_touch_response = client.get("/apple-touch-icon.png")
+
+    assert root_response.status_code == 200
+    assert root_response.json()["name"] == "Home LLM API"
+    assert favicon_response.status_code == 204
+    assert apple_touch_response.status_code == 204
     assert client.get("/health").json()["stats"] == {"documents": 1, "chunks": 2, "facts": 3}
     assert client.post("/ask", json={"question": "What?", "top_k": 3}).json() == {
         "question": "What?",

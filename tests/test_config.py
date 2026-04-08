@@ -24,6 +24,7 @@ enabled = false
 base_url = "http://127.0.0.1:6333"
 collection = "financial_documents"
 api_key = ""
+api_key_env_var = "HOME_LLM_QDRANT_API_KEY"
 
 [ingest]
 source_dirs = ["./docs/*/2026"]
@@ -38,6 +39,7 @@ top_k = 6
 enabled = true
 base_url = "https://paperless.example.com"
 token = "token-value"
+token_env_var = "HOME_LLM_PAPERLESS_TOKEN"
 page_size = 50
 """.strip(),
         encoding="utf-8",
@@ -45,12 +47,16 @@ page_size = 50
     monkeypatch.setenv(
         "HOME_LLM_POSTGRES_DSN", "postgresql://user:pass@db.example.com:5432/home_llm"
     )
+    monkeypatch.setenv("HOME_LLM_QDRANT_API_KEY", "qdrant-secret")
+    monkeypatch.setenv("HOME_LLM_PAPERLESS_TOKEN", "paperless-secret")
 
     config = load_config(config_path)
 
     assert config.postgres.dsn == "postgresql://user:pass@db.example.com:5432/home_llm"
+    assert config.qdrant.api_key == "qdrant-secret"
     assert config.paperless.enabled is True
     assert config.paperless.base_url == "https://paperless.example.com"
+    assert config.paperless.token == "paperless-secret"
     assert config.paperless.page_size == 50
 
 

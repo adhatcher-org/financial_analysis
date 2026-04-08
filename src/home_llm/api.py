@@ -4,7 +4,7 @@ import os
 from functools import lru_cache
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from home_llm.config import AppConfig, load_config
@@ -29,6 +29,27 @@ def create_app() -> FastAPI:
             "FastAPI service for querying financial and insurance documents indexed by Home LLM."
         ),
     )
+
+    @app.get("/")
+    def root() -> dict[str, Any]:
+        return {
+            "name": "Home LLM API",
+            "status": "ok",
+            "docs": "/docs",
+            "endpoints": {
+                "health": "/health",
+                "ask": "/ask",
+                "facts": "/facts",
+                "search_get": "/search",
+                "search_post": "/search",
+            },
+        }
+
+    @app.get("/favicon.ico", status_code=204)
+    @app.get("/apple-touch-icon.png", status_code=204)
+    @app.get("/apple-touch-icon-precomposed.png", status_code=204)
+    def browser_icon() -> Response:
+        return Response(status_code=204)
 
     @app.get("/health")
     def health() -> dict[str, Any]:
