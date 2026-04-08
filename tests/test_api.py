@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from home_llm import api
@@ -15,9 +17,49 @@ from home_llm.config import (
 )
 
 
-def test_health_returns_config_error_when_dsn_missing(monkeypatch) -> None:
+def test_health_returns_config_error_when_dsn_missing(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[postgres]
+dsn = ""
+dsn_env_var = "HOME_LLM_POSTGRES_DSN"
+
+[ollama]
+base_url = "http://127.0.0.1:11434"
+chat_model = "llama3.1:8b"
+embedding_model = "embeddinggemma:latest"
+enabled = true
+
+[qdrant]
+enabled = false
+base_url = "http://127.0.0.1:6333"
+collection = "financial_documents"
+api_key = ""
+
+[ingest]
+source_dirs = []
+chunk_size = 1400
+chunk_overlap = 200
+extensions = [".pdf", ".txt", ".md", ".csv"]
+
+[query]
+top_k = 6
+
+[paperless]
+enabled = false
+base_url = ""
+token = ""
+page_size = 100
+""".strip(),
+        encoding="utf-8",
+    )
     monkeypatch.delenv("HOME_LLM_POSTGRES_DSN", raising=False)
-    monkeypatch.delenv("HOME_LLM_CONFIG", raising=False)
+    monkeypatch.setenv("HOME_LLM_CONFIG", str(config_path))
+    api.get_config.cache_clear()
     client = TestClient(create_app())
 
     response = client.get("/health")
