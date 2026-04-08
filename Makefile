@@ -3,7 +3,7 @@ VENV ?= .venv
 ACTIVATE = . $(VENV)/bin/activate
 IMAGE ?= home-llm:latest
 PLATFORM ?= linux/amd64
-PORT ?= 8123
+PORT ?= 8212
 
 .PHONY: install install-dev update update-dev lock format lint typecheck test coverage security check build docker-build docker-run api clean
 
@@ -61,7 +61,7 @@ docker-build:
 docker-run:
 	docker run \
 		--name home-llm \
-		-p 8123:8123 \
+		-p 8212:8212 \
 		-e HOME_LLM_CONFIG=/app/config.toml \
 		-e HOME_LLM_POSTGRES_USER \
 		-e HOME_LLM_POSTGRES_HOST \

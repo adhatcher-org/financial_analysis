@@ -248,7 +248,7 @@ Run the API:
 ```bash
 source .venv/bin/activate
 export HOME_LLM_CONFIG="$(pwd)/config.toml"
-uvicorn home_llm.api:app --host 0.0.0.0 --port 8123
+uvicorn home_llm.api:app --host 0.0.0.0 --port 8212
 ```
 
 The API reads configuration from `HOME_LLM_CONFIG` and falls back to `config.toml`.
@@ -264,27 +264,27 @@ Endpoints:
 Examples:
 
 ```bash
-curl http://127.0.0.1:8123/health
+curl http://127.0.0.1:8212/health
 ```
 
 ```bash
-curl -X POST http://127.0.0.1:8123/ask \
+curl -X POST http://127.0.0.1:8212/ask \
   -H "Content-Type: application/json" \
   -d '{"question":"What recurring debt payments do I appear to have?","top_k":6}'
 ```
 
 ```bash
-curl "http://127.0.0.1:8123/search?query=mortgage&top_k=5"
+curl "http://127.0.0.1:8212/search?query=mortgage&top_k=5"
 ```
 
 ```bash
-curl -X POST http://127.0.0.1:8123/search \
+curl -X POST http://127.0.0.1:8212/search \
   -H "Content-Type: application/json" \
   -d '{"query":"mortgage","top_k":5}'
 ```
 
 ```bash
-curl "http://127.0.0.1:8123/facts?limit=25"
+curl "http://127.0.0.1:8212/facts?limit=25"
 ```
 
 ## Unraid
@@ -371,7 +371,7 @@ Run it:
 ```bash
 docker run -d \
   --name home-llm \
-  -p 8123:8123 \
+  -p 8212:8212 \
   -e HOME_LLM_CONFIG=/app/config.toml \
   -e HOME_LLM_POSTGRES_USER="home_llm_user" \
   -e HOME_LLM_POSTGRES_HOST="192.168.50.4" \
@@ -389,7 +389,7 @@ Or with Compose:
 docker compose -f docker-compose.home-llm.yml up -d --build
 ```
 
-The container starts the FastAPI service on port `8123`.
+The container starts the FastAPI service on port `8212`.
 
 For a Paperless-based Unraid setup, you usually only need to mount the config file:
 
@@ -402,7 +402,7 @@ services:
     container_name: home-llm
     restart: unless-stopped
     ports:
-      - "8123:8123"
+      - "8212:8212"
     environment:
       HOME_LLM_CONFIG: /app/config.toml
       HOME_LLM_POSTGRES_USER: home_llm_user

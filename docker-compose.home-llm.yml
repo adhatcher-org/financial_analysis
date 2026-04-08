@@ -6,7 +6,7 @@ services:
     container_name: home-llm
     restart: unless-stopped
     ports:
-      - "8123:8123"
+      - "8212:8212"
     environment:
       HOME_LLM_CONFIG: /app/config.toml
       HOME_LLM_POSTGRES_USER: home_llm_user
