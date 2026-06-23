@@ -4,48 +4,23 @@ on:
   push:
     branches:
       - main
-      - master
   pull_request:
     branches:
       - main
-      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test-and-security:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: make install-dev
-
-      - name: Run lint
-        run: make lint
-
-      - name: Run type checks
-        run: make typecheck
-
-      - name: Run tests
-        run: make test
-
-      - name: Run coverage
-        run: make coverage
-
-      - name: Run security checks
-        run: make security
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-report
-          path: coverage.xml
+  ci:
+    uses: adhatcher-org/shared-workflows/.github/workflows/app-ci.yml@e6520622447b5a743aab60bba5dc25c95a32cc69 # v1.0.0
+    with:
+      python-version: "3.13"
+      dependency-manager: pip
+      run-lint: true
+      run-typecheck: true
+      run-tests: true
+      run-coverage: true
+      run-security: true
+      run-docker-build: true
