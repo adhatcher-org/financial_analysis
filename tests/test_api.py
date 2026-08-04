@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from home_llm import api
-from home_llm.api import create_app
+from home_llm.api import INTERNAL_SERVER_ERROR_DETAIL, create_app
 from home_llm.config import (
     AppConfig,
     IngestConfig,
@@ -68,7 +68,7 @@ page_size = 100
     assert "PostgreSQL DSN is not configured" in response.json()["detail"]
 
 
-def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
+def test_api_endpoints_success_and_error_paths(monkeypatch, caplog) -> None:
     config = AppConfig(
         postgres=PostgresConfig(dsn="postgres://dsn"),
         ollama=OllamaConfig(
@@ -236,8 +236,22 @@ def test_api_endpoints_success_and_error_paths(monkeypatch) -> None:
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("search failed")),
     )
 
-    assert client.post("/ask", json={"question": "What?"}).json()["detail"] == "ask failed"
-    assert client.post("/ingest").json()["detail"] == "ingest failed"
-    assert client.get("/facts").json()["detail"] == "facts failed"
-    assert client.get("/search", params={"query": "needle"}).json()["detail"] == "search failed"
-    assert client.post("/search", json={"query": "needle"}).json()["detail"] == "search failed"
+    responses = [
+        client.post("/ask", json={"question": "What?"}),
+        client.post("/ingest"),
+        client.get("/facts"),
+        client.get("/search", params={"query": "needle"}),
+        client.post("/search", json={"query": "needle"}),
+    ]
+
+    assert all(response.status_code == 500 for response in responses)
+    assert all(response.json()["detail"] == INTERNAL_SERVER_ERROR_DETAIL for response in responses)
+    assert all(
+        message not in response.text
+        for response, message in zip(
+            responses,
+            ["ask failed", "ingest failed", "facts failed", "search failed", "search failed"],
+            strict=True,
+        )
+    )
+    assert sum(record.exc_info is not None for record in caplog.records) == 5

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -15,6 +16,10 @@ from pydantic import BaseModel, Field
 from home_llm.config import AppConfig, load_config
 from home_llm.ingest import ingest_documents
 from home_llm.query_service import ask_question, get_stats, list_facts, search_excerpts
+
+logger = logging.getLogger(__name__)
+
+INTERNAL_SERVER_ERROR_DETAIL = "An unexpected server error occurred."
 
 APP_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -1296,6 +1301,12 @@ def _format_timestamp(value: float | None) -> str | None:
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
 
 
+def _internal_server_error(operation: str, exc: Exception) -> HTTPException:
+    """Log diagnostic details without exposing them in an API response."""
+    logger.exception("Unexpected error while %s", operation, exc_info=exc)
+    return HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR_DETAIL)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Home LLM API",
@@ -1336,7 +1347,7 @@ def create_app() -> FastAPI:
         try:
             return ask_question(config, request.question, request.top_k)
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise _internal_server_error("answering a question", exc) from exc
 
     @app.post("/ingest")
     def ingest() -> dict[str, Any]:
@@ -1344,7 +1355,7 @@ def create_app() -> FastAPI:
         try:
             return ingest_documents(config)
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise _internal_server_error("ingesting documents", exc) from exc
 
     @app.post("/ingest/jobs")
     def start_ingest_job() -> dict[str, Any]:
@@ -1369,7 +1380,7 @@ def create_app() -> FastAPI:
             rows = list_facts(config, limit=limit)
             return {"items": rows, "count": len(rows)}
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise _internal_server_error("listing facts", exc) from exc
 
     @app.get("/search")
     def search(
@@ -1381,7 +1392,7 @@ def create_app() -> FastAPI:
             rows = search_excerpts(config, query=query, top_k=top_k)
             return {"items": rows, "count": len(rows)}
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise _internal_server_error("searching excerpts", exc) from exc
 
     @app.post("/search")
     def search_post(request: SearchRequest) -> dict[str, Any]:
@@ -1390,7 +1401,7 @@ def create_app() -> FastAPI:
             rows = search_excerpts(config, query=request.query, top_k=request.top_k)
             return {"items": rows, "count": len(rows)}
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise _internal_server_error("searching excerpts", exc) from exc
 
     return app
 
